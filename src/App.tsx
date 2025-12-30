@@ -59,8 +59,6 @@ export default function App() {
       }, []
     )
 
-    console.log("Fetched notes:", notes)
-
     setNotes(notes)
   }
 
@@ -81,7 +79,7 @@ export default function App() {
     await fetchAllNotebooks()
   }
 
-  const handleNotebookUpdate = async (notebookId: string, updates: Partial<Notebook>) => {
+  const handleNotebookUpdate = async () => {
 
     await fetchAllNotebooks()
   }
