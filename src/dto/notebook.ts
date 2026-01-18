@@ -1,41 +1,47 @@
+export interface NoteFileResponse {
+  original_name: string;
+  url: string;
+}
+
 export interface GetAllNotebooksResponse {
-    id: string;
-    name: string;
-    parent_id: string | null;
-    created_at: Date;
-    updated_at: Date | null;
-    notes: GetAllNotebookResponseNote[];
+  id: string;
+  name: string;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string | null;
+  notes: GetAllNotebookResponseNote[];
 }
 
 export interface GetAllNotebookResponseNote {
-    id: string;
-    title: string;
-    content: string;
-    created_at: Date;
-    updated_at: Date | null;
+  id: string;
+  title: string;
+  content: string;
+  created_at: string; // atau Date
+  updated_at: string | null;
+  files: NoteFileResponse[];
 }
 
 export interface CreateNotebooksRequest {
-    name: string;
-    parent_id: string | null;
+  name: string;
+  parent_id: string | null;
 }
 
 export interface CreateNotebooksResponse {
-    id: string;
+  id: string;
 }
 
 export interface UpdateNotebooksRequest {
-    name: string;
+  name: string;
 }
 
 export interface UpdateNotebooksResponse {
-    id: string;
+  id: string;
 }
 
 export interface MoveNotebooksRequest {
-    parent_id: string | null;
+  parent_id: string | null;
 }
 
 export interface UpdateNotebooksResponse {
-    id: string;
+  id: string;
 }

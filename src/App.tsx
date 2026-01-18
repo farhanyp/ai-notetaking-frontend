@@ -1,229 +1,353 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Sidebar } from "./components/sidebar"
-import { NoteEditor } from "./components/note-editor"
-import { SearchDialog } from "./components/search-dialog"
-import { AIChatDialog } from "./components/ai-chat-dialog"
-import { Button } from "./components/ui/button"
-import { Search, MessageSquare, Plus, FolderPlus, XCircle } from "lucide-react" // Import XCircle for clear button
-import type { Note } from "./types/note"
-import type { Notebook } from "./types/notebook"
-import "./App.css"
-import axios from "axios"
-import type { BaseResponse } from "./dto/base-response"
-import type { CreateNotebooksRequest, CreateNotebooksResponse, GetAllNotebooksResponse, MoveNotebooksRequest } from "./dto/notebook"
-import { AppConfig } from "./config/config"
-import type { CreateNoteRequest, MoveNoteRequest, MoveNoteResponse, UpdateNoteRequest, UpdateNoteResponse } from "./dto/note"
+import { useEffect, useState } from "react";
+import { Sidebar } from "./components/sidebar";
+import { NoteEditor } from "./components/note-editor";
+import { SearchDialog } from "./components/search-dialog";
+import { AIChatDialog } from "./components/ai-chat-dialog";
+import { Button } from "./components/ui/button";
+import {
+  Search,
+  MessageSquare,
+  Plus,
+  FolderPlus,
+  XCircle,
+} from "lucide-react"; // Import XCircle for clear button
+import type { Note } from "./types/note";
+import type { Notebook } from "./types/notebook";
+import "./App.css";
+import axios from "axios";
+import type { BaseResponse } from "./dto/base-response";
+import type {
+  CreateNotebooksRequest,
+  CreateNotebooksResponse,
+  GetAllNotebooksResponse,
+  MoveNotebooksRequest,
+} from "./dto/notebook";
+import { AppConfig } from "./config/config";
+import type {
+  CreateNoteRequest,
+  MoveNoteRequest,
+  MoveNoteResponse,
+  UpdateNoteRequest,
+  UpdateNoteResponse,
+} from "./dto/note";
 
 export default function App() {
-  const [notebooks, setNotebooks] = useState<Notebook[]>([])
-  const [notes, setNotes] = useState<Note[]>([])
-  const [selectedNotebook, setSelectedNotebook] = useState<string | null>(null)
-  const [selectedNote, setSelectedNote] = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
-  const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(new Set())
-  const [isCreatingNote, setIsCreatingNote] = useState(false)
-  const [isCreatingNotebook, setIsCreatingNotebook] = useState(false)
-  const [isProcessingMove, setIsProcessingMove] = useState(false) // State for move operations
-  const [isDeletingNotebook, setIsDeletingNotebook] = useState<string | null>(null) // State for deleting notebook
-  const [isDeletingNote, setIsDeletingNote] = useState<string | null>(null) // State for deleting note
+  const [notebooks, setNotebooks] = useState<
+    Notebook[]
+  >([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [selectedNotebook, setSelectedNotebook] =
+    useState<string | null>(null);
+  const [selectedNote, setSelectedNote] =
+    useState<string | null>(null);
+  const [searchOpen, setSearchOpen] =
+    useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [
+    expandedNotebooks,
+    setExpandedNotebooks,
+  ] = useState<Set<string>>(new Set());
+  const [isCreatingNote, setIsCreatingNote] =
+    useState(false);
+  const [
+    isCreatingNotebook,
+    setIsCreatingNotebook,
+  ] = useState(false);
+  const [isProcessingMove, setIsProcessingMove] =
+    useState(false); // State for move operations
+  const [
+    isDeletingNotebook,
+    setIsDeletingNotebook,
+  ] = useState<string | null>(null); // State for deleting notebook
+  const [isDeletingNote, setIsDeletingNote] =
+    useState<string | null>(null); // State for deleting note
 
-  const currentNote = notes.find((note) => note.id === selectedNote)
+  const currentNote = notes.find(
+    (note) => note.id === selectedNote,
+  );
 
   const fetchAllNotebooks = async () => {
-    const data = await axios.get<BaseResponse<GetAllNotebooksResponse[]>>(`${AppConfig.baseURL}/notebook`)
-    
-    setNotebooks(data.data.data.map(notebook => ({
-      id: notebook.id,
-      name: notebook.name,
-      parentId: notebook.parent_id,
-      createdAt: new Date(notebook.created_at),
-      updatedAt: new Date(notebook.updated_at ?? notebook.created_at)
-    })))
+    const data = await axios.get<
+      BaseResponse<GetAllNotebooksResponse[]>
+    >(`${AppConfig.baseURL}/notebook`);
+
+    setNotebooks(
+      data.data.data.map((notebook) => ({
+        id: notebook.id,
+        name: notebook.name,
+        parentId: notebook.parent_id,
+        createdAt: new Date(notebook.created_at),
+        updatedAt: new Date(
+          notebook.updated_at ??
+            notebook.created_at,
+        ),
+      })),
+    );
 
     const notes = data.data.data.reduce<Note[]>(
       (currentNotes, notebook) => {
         return [
           ...currentNotes,
-          ...notebook.notes.map<Note>( n => ({
+          ...notebook.notes.map<Note>((n) => ({
             id: n.id,
             title: n.title,
             content: n.content,
             notebookId: notebook.id,
+            // Mapping dari API (files) ke internal state (files)
+            files: n.files
+              ? n.files.map((f) => ({
+                  name: f.original_name,
+                  url: f.url,
+                }))
+              : [],
             createdAt: new Date(n.created_at),
-            updatedAt: new Date(n.updated_at ?? n.created_at)
-          }))
-        ]
-      }, []
-    )
+            updatedAt: new Date(
+              n.updated_at ?? n.created_at,
+            ),
+          })),
+        ];
+      },
+      [],
+    );
 
-    setNotes(notes)
-  }
+    setNotes(notes);
+  };
 
   useEffect(() => {
+    fetchAllNotebooks();
+  }, []);
 
-    fetchAllNotebooks()
-  }, [])
-
-  const handleNoteUpdate = async (noteId: string, updates: Partial<Note>) => {
-
-    const request:UpdateNoteRequest = {
+  const handleNoteUpdate = async (
+    noteId: string,
+    updates: Partial<Note>,
+  ) => {
+    const request: UpdateNoteRequest = {
       title: updates.title || "",
       content: updates.content || "",
-    }
+    };
 
-    await axios.put<BaseResponse<UpdateNoteResponse>>(`${AppConfig.baseURL}/note/${noteId}`, request)
+    await axios.put<
+      BaseResponse<UpdateNoteResponse>
+    >(
+      `${AppConfig.baseURL}/note/${noteId}`,
+      request,
+    );
 
-    await fetchAllNotebooks()
-  }
+    await fetchAllNotebooks();
+  };
 
   const handleNotebookUpdate = async () => {
+    await fetchAllNotebooks();
+  };
 
-    await fetchAllNotebooks()
-  }
+  const handleDeleteNotebook = async (
+    notebookId: string,
+  ) => {
+    if (isDeletingNotebook === notebookId) return; // Prevent double deletion
 
-  const handleDeleteNotebook = async (notebookId: string) => {
-    if (isDeletingNotebook === notebookId) return // Prevent double deletion
+    setIsDeletingNotebook(notebookId); // Set loading for this specific notebook
 
-    setIsDeletingNotebook(notebookId) // Set loading for this specific notebook
+    await axios.delete(
+      `${AppConfig.baseURL}/notebook/${notebookId}`,
+    );
 
-    await axios.delete(`${AppConfig.baseURL}/notebook/${notebookId}`)
-
-    await fetchAllNotebooks()
+    await fetchAllNotebooks();
 
     // Clear selection if deleted
-    if (selectedNotebook === notebookId ) {
-      setSelectedNotebook(null)
-      setSelectedNote(null)
+    if (selectedNotebook === notebookId) {
+      setSelectedNotebook(null);
+      setSelectedNote(null);
     }
 
-    setIsDeletingNotebook(null) // Clear loading
-  }
+    setIsDeletingNotebook(null); // Clear loading
+  };
 
-  const handleDeleteNote = async (noteId: string) => {
-    if (isDeletingNote === noteId) return // Prevent double deletion
+  const handleDeleteNote = async (
+    noteId: string,
+  ) => {
+    if (isDeletingNote === noteId) return; // Prevent double deletion
 
-    setIsDeletingNote(noteId) // Set loading for this specific note
+    setIsDeletingNote(noteId); // Set loading for this specific note
 
-    await axios.delete(`${AppConfig.baseURL}/note/${noteId}`)
+    await axios.delete(
+      `${AppConfig.baseURL}/note/${noteId}`,
+    );
 
-    await fetchAllNotebooks()
+    await fetchAllNotebooks();
 
     // Clear selection if deleted
     if (selectedNote === noteId) {
-      setSelectedNote(null)
+      setSelectedNote(null);
     }
 
-    setIsDeletingNote(null) // Clear loading
-  }
+    setIsDeletingNote(null); // Clear loading
+  };
 
-  const getAllChildNotebooks = (parentId: string): string[] => {
-    const children = notebooks.filter((nb) => nb.parentId === parentId)
-    const allIds = [parentId]
+  const getAllChildNotebooks = (
+    parentId: string,
+  ): string[] => {
+    const children = notebooks.filter(
+      (nb) => nb.parentId === parentId,
+    );
+    const allIds = [parentId];
 
     children.forEach((child) => {
-      allIds.push(...getAllChildNotebooks(child.id))
-    })
+      allIds.push(
+        ...getAllChildNotebooks(child.id),
+      );
+    });
 
-    return allIds
-  }
+    return allIds;
+  };
 
-  const handleMoveNote = async (noteId: string, targetNotebookId: string) => {
-    setIsProcessingMove(true) // Start global loading for move
-    await new Promise((resolve) => setTimeout(resolve, 800)) // Dummy delay
+  const handleMoveNote = async (
+    noteId: string,
+    targetNotebookId: string,
+  ) => {
+    setIsProcessingMove(true); // Start global loading for move
+    await new Promise((resolve) =>
+      setTimeout(resolve, 800),
+    ); // Dummy delay
 
     setNotes((prev) =>
       prev.map((note) =>
-        note.id === noteId ? { ...note, notebookId: targetNotebookId, updatedAt: new Date() } : note,
+        note.id === noteId
+          ? {
+              ...note,
+              notebookId: targetNotebookId,
+              updatedAt: new Date(),
+            }
+          : note,
       ),
-    )
+    );
 
-    const request:MoveNoteRequest ={
+    const request: MoveNoteRequest = {
       notebook_id: targetNotebookId,
-    }
-    
-    await axios.put<BaseResponse<MoveNoteResponse>>(`${AppConfig.baseURL}/note/${noteId}/move`, request)
+    };
 
-    await fetchAllNotebooks()
+    await axios.put<
+      BaseResponse<MoveNoteResponse>
+    >(
+      `${AppConfig.baseURL}/note/${noteId}/move`,
+      request,
+    );
+
+    await fetchAllNotebooks();
 
     // Auto-expand target notebook
-    setExpandedNotebooks((prev) => new Set([...prev, targetNotebookId]))
-    setIsProcessingMove(false) // End global loading
-  }
+    setExpandedNotebooks(
+      (prev) =>
+        new Set([...prev, targetNotebookId]),
+    );
+    setIsProcessingMove(false); // End global loading
+  };
 
-  const handleMoveNotebook = async (notebookId: string, targetParentId: string | null) => {
+  const handleMoveNotebook = async (
+    notebookId: string,
+    targetParentId: string | null,
+  ) => {
     // Prevent moving a notebook into itself or its children
-    const childIds = getAllChildNotebooks(notebookId)
-    if (targetParentId && childIds.includes(targetParentId)) {
-      return
+    const childIds =
+      getAllChildNotebooks(notebookId);
+    if (
+      targetParentId &&
+      childIds.includes(targetParentId)
+    ) {
+      return;
     }
 
-    setIsProcessingMove(true) // Start global loading for move
+    setIsProcessingMove(true); // Start global loading for move
 
-    const request:MoveNotebooksRequest ={
+    const request: MoveNotebooksRequest = {
       parent_id: targetParentId,
-    }
-    await axios.put<BaseResponse<MoveNotebooksRequest>>(`${AppConfig.baseURL}/notebook/${notebookId}/move`, request)
+    };
+    await axios.put<
+      BaseResponse<MoveNotebooksRequest>
+    >(
+      `${AppConfig.baseURL}/notebook/${notebookId}/move`,
+      request,
+    );
 
-    await fetchAllNotebooks()
+    await fetchAllNotebooks();
 
     // Auto-expand target parent if it exists
     if (targetParentId) {
-      setExpandedNotebooks((prev) => new Set([...prev, targetParentId]))
+      setExpandedNotebooks(
+        (prev) =>
+          new Set([...prev, targetParentId]),
+      );
     }
-    setIsProcessingMove(false) // End global loading
-  }
+    setIsProcessingMove(false); // End global loading
+  };
 
   const handleCreateNote = async () => {
-    if (!selectedNotebook || isCreatingNote) return
+    if (!selectedNotebook || isCreatingNote)
+      return;
 
-    setIsCreatingNote(true)
+    setIsCreatingNote(true);
 
-    const request:CreateNoteRequest = {
+    const request: CreateNoteRequest = {
       title: "Untitled Note",
-      content: "# Untitled Note\n\nStart writing...",
+      content:
+        "# Untitled Note\n\nStart writing...",
       notebook_id: selectedNotebook,
-    }
-    const res = await axios.post<BaseResponse<CreateNotebooksResponse>>(`${AppConfig.baseURL}/note/create`, request)
+    };
+    const res = await axios.post<
+      BaseResponse<CreateNotebooksResponse>
+    >(
+      `${AppConfig.baseURL}/note/create`,
+      request,
+    );
 
-    await fetchAllNotebooks()
+    await fetchAllNotebooks();
 
-    setSelectedNote(res.data.data.id) 
+    setSelectedNote(res.data.data.id);
 
     // Auto-expand the notebook when adding a note
-    setExpandedNotebooks((prev) => new Set([...prev, selectedNotebook]))
+    setExpandedNotebooks(
+      (prev) =>
+        new Set([...prev, selectedNotebook]),
+    );
 
-    setIsCreatingNote(false)
-  }
+    setIsCreatingNote(false);
+  };
 
   const handleCreateNotebook = async () => {
-    if (isCreatingNotebook) return
+    if (isCreatingNotebook) return;
 
-    setIsCreatingNotebook(true)
+    setIsCreatingNotebook(true);
 
-    const request:CreateNotebooksRequest = {
+    const request: CreateNotebooksRequest = {
       name: "New Notebook",
       parent_id: selectedNotebook || null,
-    }
+    };
 
-    await axios.post<BaseResponse<CreateNotebooksRequest>>(`${AppConfig.baseURL}/notebook/create`, request)
+    await axios.post<
+      BaseResponse<CreateNotebooksRequest>
+    >(
+      `${AppConfig.baseURL}/notebook/create`,
+      request,
+    );
 
-    await fetchAllNotebooks()
+    await fetchAllNotebooks();
 
     // Auto-expand parent notebook when adding a child notebook
     if (selectedNotebook) {
-      setExpandedNotebooks((prev) => new Set([...prev, selectedNotebook]))
+      setExpandedNotebooks(
+        (prev) =>
+          new Set([...prev, selectedNotebook]),
+      );
     }
 
-    setIsCreatingNotebook(false)
-  }
+    setIsCreatingNotebook(false);
+  };
 
   const handleClearSelection = () => {
-    setSelectedNotebook(null)
-    setSelectedNote(null)
-  }
+    setSelectedNotebook(null);
+    setSelectedNote(null);
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -238,7 +362,9 @@ export default function App() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSearchOpen(true)}
+                onClick={() =>
+                  setSearchOpen(true)
+                }
                 className="h-8 w-8 p-0 hover:bg-blue-50"
               >
                 <Search className="h-4 w-4" />
@@ -277,7 +403,10 @@ export default function App() {
               variant="outline"
               size="sm"
               onClick={handleCreateNote}
-              disabled={!selectedNotebook || isCreatingNote}
+              disabled={
+                !selectedNotebook ||
+                isCreatingNote
+              }
               className="flex-1 bg-transparent"
             >
               {isCreatingNote ? (
@@ -319,7 +448,9 @@ export default function App() {
           onMoveNote={handleMoveNote}
           onMoveNotebook={handleMoveNotebook}
           expandedNotebooks={expandedNotebooks}
-          setExpandedNotebooks={setExpandedNotebooks}
+          setExpandedNotebooks={
+            setExpandedNotebooks
+          }
           isProcessingMove={isProcessingMove}
           isDeletingNotebook={isDeletingNotebook}
           isDeletingNote={isDeletingNote}
@@ -329,13 +460,23 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col bg-white overflow-x-hidden">
         {currentNote ? (
-          <NoteEditor note={currentNote} onUpdate={handleNoteUpdate} />
+          <NoteEditor
+            note={currentNote}
+            onUpdate={handleNoteUpdate}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
             <div className="text-center">
-              <div className="text-6xl mb-4">📝</div>
-              <h2 className="text-xl font-medium mb-2">Select a note to start editing</h2>
-              <p className="text-sm">Choose a note from the sidebar or create a new one</p>
+              <div className="text-6xl mb-4">
+                📝
+              </div>
+              <h2 className="text-xl font-medium mb-2">
+                Select a note to start editing
+              </h2>
+              <p className="text-sm">
+                Choose a note from the sidebar or
+                create a new one
+              </p>
             </div>
           </div>
         )}
@@ -347,16 +488,22 @@ export default function App() {
         onOpenChange={setSearchOpen}
         notes={notes}
         onNoteSelect={(noteId) => {
-          setSelectedNote(noteId)
-          const note = notes.find((n) => n.id === noteId)
+          setSelectedNote(noteId);
+          const note = notes.find(
+            (n) => n.id === noteId,
+          );
           if (note) {
-            setSelectedNotebook(note.notebookId)
+            setSelectedNotebook(note.notebookId);
           }
-          setSearchOpen(false)
+          setSearchOpen(false);
         }}
       />
 
-      <AIChatDialog open={chatOpen} onOpenChange={setChatOpen} notes={notes} />
+      <AIChatDialog
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        notes={notes}
+      />
     </div>
-  )
+  );
 }
