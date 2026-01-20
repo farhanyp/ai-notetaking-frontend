@@ -1,11 +1,7 @@
 "use client";
 
 import type React from "react";
-import {
-  useState,
-  useEffect,
-  useRef,
-} from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import axios from "axios";
 import {
@@ -17,6 +13,7 @@ import {
   FileText,
   ExternalLink,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -28,31 +25,18 @@ import { AppConfig } from "../config/config";
 
 interface NoteEditorProps {
   note: Note;
-  onUpdate: (
-    noteId: string,
-    updates: Partial<Note>,
-  ) => Promise<void>;
+  onUpdate: (noteId: string, updates: Partial<Note>) => Promise<void>;
 }
 
-export function NoteEditor({
-  note,
-  onUpdate,
-}: NoteEditorProps) {
-  const [isPreview, setIsPreview] =
-    useState(false);
-  const [content, setContent] = useState(
-    note.content,
-  );
+export function NoteEditor({ note, onUpdate }: NoteEditorProps) {
+  const [isPreview, setIsPreview] = useState(false);
+  const [content, setContent] = useState(note.content);
   const [title, setTitle] = useState(note.title);
-  const [hasChanges, setHasChanges] =
-    useState(false);
-  const [isProcessing, setIsProcessing] =
-    useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const fileInputRef =
-    useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sinkronisasi state saat berpindah note
   useEffect(() => {
     setContent(note.content);
     setTitle(note.title);
@@ -60,12 +44,8 @@ export function NoteEditor({
     setIsPreview(false);
   }, [note.id, note.content, note.title]);
 
-  // Pantau perubahan input untuk tombol Save
   useEffect(() => {
-    setHasChanges(
-      content !== note.content ||
-        title !== note.title,
-    );
+    setHasChanges(content !== note.content || title !== note.title);
   }, [content, title, note.content, note.title]);
 
   const handleSave = async () => {
@@ -73,46 +53,54 @@ export function NoteEditor({
     setHasChanges(false);
   };
 
-  // Fungsi Abstraksi untuk Ekstraksi AI
-  const runExtraction = async (
-    noteId: string,
-  ) => {
+  const runExtraction = async (noteId: string) => {
     setIsProcessing(true);
     try {
-      const extractRes = await axios.get(
-        `${AppConfig.baseURL}/note/${noteId}/extract-preview`,
-      );
+      const extractRes = await axios.get(`${AppConfig.baseURL}/note/${noteId}/extract-preview`);
 
       if (extractRes.data.success) {
-        setContent(
-          extractRes.data.data.extracted_text,
-        );
+        setContent(extractRes.data.data.extracted_text);
         setIsPreview(false);
       }
     } catch (error) {
       console.error("Extraction error:", error);
-      alert(
-        "AI gagal mengekstrak teks dari dokumen.",
-      );
+      alert("AI gagal mengekstrak teks dari dokumen.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Logika Tombol Utama: Upload baru atau langsung Ekstrak
+  const runAIExpert = async (noteId: string) => {
+    if (isProcessing) return; // Cegah double click
+
+    setIsProcessing(true);
+    try {
+      const res = await axios.get(`${AppConfig.baseURL}/note/${noteId}/extract-preview-ai`);
+
+      // Sesuaikan res.data.data dengan struktur JSON dari Go Anda
+      if (res.data && res.data.data) {
+        // Jika di Go Anda fieldnya bernama 'reply', gunakan res.data.data.reply
+        const newContent = res.data.data.reply || res.data.data.extracted_text;
+        setContent(newContent);
+        setIsPreview(true);
+      }
+    } catch (error) {
+      console.error("AI Expert Error:", error);
+      alert("Gagal memproses teks dengan AI.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleActionClick = () => {
     if (note.files && note.files.length > 0) {
-      // Jika file sudah ada di DB, langsung jalankan AI
       runExtraction(note.id);
     } else {
-      // Jika belum ada file, minta user pilih file
       fileInputRef.current?.click();
     }
   };
 
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -122,57 +110,43 @@ export function NoteEditor({
       formData.append("document", file);
       formData.append("note_id", note.id);
 
-      // 1. Upload ke Backend (S3/Garage)
-      await axios.post(
-        `${AppConfig.baseURL}/upload`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+      await axios.post(`${AppConfig.baseURL}/upload`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
         },
-      );
+      });
 
-      // 2. Jalankan Ekstraksi AI setelah upload sukses
       await runExtraction(note.id);
     } catch (error) {
       console.error("Upload error:", error);
       alert("Gagal mengunggah file.");
       setIsProcessing(false);
     } finally {
-      if (fileInputRef.current)
-        fileInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-  ) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.ctrlKey && e.key === "s") {
       e.preventDefault();
       if (hasChanges) handleSave();
     }
   };
 
-  const hasExistingFiles =
-    note.files && note.files.length > 0;
+  const hasExistingFiles = note.files && note.files.length > 0;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
-      {/* Header Section */}
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0 mr-4">
             <Input
               value={title}
-              onChange={(e) =>
-                setTitle(e.target.value)
-              }
+              onChange={(e) => setTitle(e.target.value)}
               className="text-xl font-bold border-none p-0 h-auto focus-visible:ring-0 bg-transparent placeholder:text-gray-300"
               placeholder="Untitled Note"
             />
 
-            {/* File List Badges */}
             {hasExistingFiles && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {note.files.map((file, index) => (
@@ -203,7 +177,6 @@ export function NoteEditor({
               accept=".pdf,.txt"
             />
 
-            {/* Tombol Pintar: Berubah fungsi berdasarkan status file */}
             <Button
               variant="outline"
               size="sm"
@@ -222,11 +195,26 @@ export function NoteEditor({
               ) : (
                 <FileUp className="h-4 w-4 mr-2" />
               )}
-              {isProcessing
-                ? "Processing..."
-                : hasExistingFiles
-                  ? "Re-extract AI"
-                  : "Extract PDF"}
+              {isProcessing ? "Processing..." : hasExistingFiles ? "Re-extract AI" : "Extract PDF"}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => runAIExpert(note.id)}
+              disabled={isProcessing || !hasExistingFiles}
+              className={`h-8 shadow-sm ${
+                hasExistingFiles
+                  ? "border-purple-200 text-purple-600 hover:bg-purple-50"
+                  : "text-gray-400 border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed"
+              }`}
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {isProcessing ? "Processing..." : "AI Expert Refactor"}
             </Button>
 
             {hasChanges && (
@@ -244,16 +232,10 @@ export function NoteEditor({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() =>
-                setIsPreview(!isPreview)
-              }
+              onClick={() => setIsPreview(!isPreview)}
               className="text-gray-500 h-8"
             >
-              {isPreview ? (
-                <Edit className="h-4 w-4 mr-2" />
-              ) : (
-                <Eye className="h-4 w-4 mr-2" />
-              )}
+              {isPreview ? <Edit className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
               {isPreview ? "Edit" : "Preview"}
             </Button>
           </div>
@@ -261,8 +243,7 @@ export function NoteEditor({
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
-            Last updated:{" "}
-            {formatUpdatedAt(note.updatedAt)}
+            Last updated: {formatUpdatedAt(note.updatedAt)}
           </span>
           {isProcessing && (
             <span className="text-xs text-indigo-500 animate-pulse font-semibold">
@@ -277,18 +258,14 @@ export function NoteEditor({
         {isPreview ? (
           <div className="h-full overflow-auto p-8 bg-gray-50/50">
             <div className="max-w-3xl mx-auto prose prose-indigo bg-white p-10 shadow-sm border border-gray-200 rounded-xl min-h-full">
-              <ReactMarkdown>
-                {content}
-              </ReactMarkdown>
+              <ReactMarkdown>{content}</ReactMarkdown>
             </div>
           </div>
         ) : (
           <div className="h-full flex flex-col p-6">
             <Textarea
               value={content}
-              onChange={(e) =>
-                setContent(e.target.value)
-              }
+              onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Start typing your thoughts or upload a PDF to extract notes..."
               className="flex-1 w-full resize-none border-none p-0 focus-visible:ring-0 font-mono text-base leading-relaxed text-gray-700 placeholder:text-gray-300"
